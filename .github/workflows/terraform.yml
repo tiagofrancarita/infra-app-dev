@@ -1,0 +1,53 @@
+# infra-repo/.github/workflows/terraform.yml
+
+name: Terraform
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  terraform:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v3
+
+      - name: Configurar Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.4.6
+
+      - name: Configurar Credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Inicializar Terraform
+        run: terraform init
+
+      - name: Validar Terraform
+        run: terraform validate
+
+      - name: Planejar Terraform
+        run: terraform plan -out=tfplan
+
+      - name: Aplicar Terraform
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve tfplan
+
+      - name: Exportar Output
+        id: output
+        run: echo "::set-output name=ec2_ip::$(terraform output -raw ec2_public_ip)"
+
+      - name: Enviar Output para Repositório da Aplicação
+        uses: peter-evans/create-or-update-file@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          repository: seu-usuario/app-repo
+          path: infra_outputs/ec2_public_ip.txt
+          content: "${{ steps.output.outputs.ec2_ip }}"
